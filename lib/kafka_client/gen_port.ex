@@ -152,21 +152,38 @@ defmodule KafkaClient.GenPort do
   defp handle_special_port_message(_other), do: nil
 
   defp open(main_class, args) do
+    case Application.get_env(:kafka_client, :backend, :java) do
+      :java -> open_java(main_class, args)
+      :rust -> open_rust(main_class, args)
+    end
+  end
+
+  defp open_java(main_class, args) do
     encoded_args = Enum.map(args, &(&1 |> :erlang.term_to_binary() |> Base.encode64()))
 
-    Port.open(
-      {:spawn_executable, System.find_executable("java")},
+    open_port(
+      System.find_executable("java"),
       [
-        :nouse_stdio,
-        :binary,
-        :exit_status,
-        packet: 4,
-        args: [
-          "-cp",
-          "#{Application.app_dir(:kafka_client)}/priv/kafka-client-1.0.jar",
-          "com.happening.kafka.#{main_class}" | encoded_args
-        ]
+        "-cp",
+        "#{Application.app_dir(:kafka_client)}/priv/kafka-client-1.0.jar",
+        "com.happening.kafka.#{main_class}" | encoded_args
       ]
+    )
+  end
+
+  # The arguments may hold credentials, so they are sent through the port instead of the command
+  # line, which can be seen by other OS processes.
+  defp open_rust(main_class, args) do
+    [program, "Main"] = String.split(main_class, ".")
+    port = open_port("#{Application.app_dir(:kafka_client)}/priv/kafka_client_port", [program])
+    Port.command(port, :erlang.term_to_binary(args))
+    port
+  end
+
+  defp open_port(executable, args) do
+    Port.open(
+      {:spawn_executable, executable},
+      [:nouse_stdio, :binary, :exit_status, packet: 4, args: args]
     )
   end
 
