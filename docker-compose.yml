@@ -2,7 +2,7 @@
 version: '3'
 services:
   broker:
-    image: confluentinc/cp-kafka:7.5.1
+    image: confluentinc/cp-kafka:8.4.0
     container_name: broker
     ports:
       - 9092:9092
@@ -12,6 +12,8 @@ services:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:29093
       KAFKA_LISTENERS: PLAINTEXT://broker:29092,CONTROLLER://localhost:29093,PLAINTEXT_HOST://0.0.0.0:9092
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
