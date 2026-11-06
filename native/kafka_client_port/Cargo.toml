@@ -1,0 +1,19 @@
+[package]
+name = "kafka_client_port"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT"
+publish = false
+
+[dependencies]
+async-trait = "0.1"
+bytes = "1"
+confluent-kafka = "=1.0.0"
+eetf = "0.10"
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time"] }
+
+[profile.release]
+codegen-units = 1
+lto = "fat"
+strip = true
