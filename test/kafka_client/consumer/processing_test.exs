@@ -111,7 +111,7 @@ defmodule KafkaClient.Consumer.ProcessingTest do
   end
 
   test "handler exception" do
-    consumer = start_consumer!()
+    consumer = start_consumer!(max_batch_size: 1)
     [topic] = consumer.subscriptions
 
     sync_produce!(topic, partition: 0)

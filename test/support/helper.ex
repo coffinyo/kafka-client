@@ -181,6 +181,14 @@ defmodule KafkaClient.Test.Helper do
     :ok = Admin.create_topics(:test_admin, topics)
     topic_names = Enum.map(topics, &elem(&1, 0))
     ExUnit.Callbacks.on_exit(fn -> Admin.delete_topics(:test_admin, topic_names) end)
+
+    # A successful create only means that the controller has accepted the topics. Brokers learn
+    # about them shortly after, and until then the topics can't be seen by clients.
+    eventually(
+      fn -> assert {:ok, _} = Admin.describe_topics(:test_admin, topic_names) end,
+      attempts: 100,
+      delay: 20
+    )
   end
 
   defp record(topic, opts) do
@@ -189,7 +197,7 @@ defmodule KafkaClient.Test.Helper do
     value = Keyword.get(opts, :value, :crypto.strong_rand_bytes(4))
 
     timestamp =
-      DateTime.to_unix(~U[2022-01-01 00:00:00.00Z], :nanosecond) +
+      DateTime.to_unix(~U[2022-01-01 00:00:00.00Z], :millisecond) +
         System.unique_integer([:positive, :monotonic])
 
     partition = Keyword.get(opts, :partition, 0)
@@ -255,7 +263,12 @@ defmodule KafkaClient.Test.Helper do
     send(test_pid, {:processed, batch_id})
   end
 
-  defp brokers, do: [{"localhost", 9092}]
+  defp brokers do
+    [host, port] =
+      "KAFKA_CLIENT_TEST_BROKER" |> System.get_env("localhost:9092") |> String.split(":")
+
+    [{host, String.to_integer(port)}]
+  end
 
   defp eventually(fun, attempts, delay) do
     fun.()
