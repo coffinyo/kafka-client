@@ -10,8 +10,14 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [java, rust]
+
     env:
-      CACHE_VERSION: v1
+      CACHE_VERSION: v2
+      KAFKA_CLIENT_BACKEND: ${{ matrix.backend }}
 
     steps:
       - name: Checkout code
@@ -24,10 +30,18 @@ jobs:
           elixir-version: 1.15.6
 
       - name: Install Java
+        if: matrix.backend == 'java'
         uses: actions/setup-java@v2
         with:
           java-version: 17
           distribution: adopt-openj9
+
+      - name: Install Rust
+        if: matrix.backend == 'rust'
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.96.0
+          components: clippy, rustfmt
 
       - name: Start supporting services
         run: docker compose up -d
@@ -58,13 +72,15 @@ jobs:
             deps
             _build
             port/target
+            native/kafka_client_port/target
             priv/kafka-client-1.0.jar
+            priv/kafka_client_port
           # We're only using current branch name for caching. That way we avoid the need for
           # complicated `hashFiles` expressions. The cache is always force updated on successful
           # run (see clean & save actions at the end).
-          key: deps-${{ env.CACHE_VERSION }}-${{ github.ref }}-
+          key: deps-${{ env.CACHE_VERSION }}-${{ matrix.backend }}-${{ github.ref }}-
           restore-keys: |
-            deps-${{ env.CACHE_VERSION }}-refs/heads/develop-
+            deps-${{ env.CACHE_VERSION }}-${{ matrix.backend }}-refs/heads/develop-
 
       - name: Fetch deps
         run: mix deps.get
@@ -77,9 +93,18 @@ jobs:
           # check Elixir formatting
           MIX_ENV=test mix format --check-formatted
 
-          # check Java formatting
-          cd port
-          mvn spotless:check
+      - name: Check Java formatting
+        if: matrix.backend == 'java'
+        working-directory: port
+        run: mvn spotless:check
+
+      - name: Check Rust port
+        if: matrix.backend == 'rust'
+        working-directory: native/kafka_client_port
+        run: |
+          cargo fmt --check
+          cargo clippy --locked --all-targets -- --deny warnings
+          cargo test --locked
 
       - name: Run tests
         # hacky way to avoid failing on flaky tests
@@ -101,7 +126,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh extension install actions/gh-actions-cache
-          gh actions-cache delete deps-${{ env.CACHE_VERSION }}-${{ github.ref }}- --confirm
+          gh actions-cache delete deps-${{ env.CACHE_VERSION }}-${{ matrix.backend }}-${{ github.ref }}- --confirm
         continue-on-error: true
 
       - name: Save cache
@@ -111,5 +136,7 @@ jobs:
             deps
             _build
             port/target
+            native/kafka_client_port/target
             priv/kafka-client-1.0.jar
-          key: deps-${{ env.CACHE_VERSION }}-${{ github.ref }}-
+            priv/kafka_client_port
+          key: deps-${{ env.CACHE_VERSION }}-${{ matrix.backend }}-${{ github.ref }}-
